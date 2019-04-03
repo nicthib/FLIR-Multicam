@@ -221,7 +221,7 @@ def configure_cam(cam, verbose):
             print('Unable to get exposure time. Aborting...')
             return False
 
-        # Set exposure float value
+        # Set exposure float value. Note that this is in microseconds, not ms.
         node_exposure_time.SetValue(exp_time * 1000000)
         if verbose == 0:
             print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
