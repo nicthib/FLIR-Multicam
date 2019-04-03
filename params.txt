@@ -1,5 +1,6 @@
 1200
 0.0067968
 20.0333
-C:\test\test1
-test1
+C:\test\webcam\runA
+runA_stim
+1
