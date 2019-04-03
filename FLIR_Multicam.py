@@ -5,20 +5,18 @@ import PySpin
 import serial
 import re
 import sys
-import nidaqmx as ni
-import numpy as np
 
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=12')
 
 # Read webcam params file
-with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
+with open('params.txt') as f:
     lines = f.readlines()
 lines = [x.strip() for x in lines]
 num_images = int(round(float(lines[0])))
 exp_time = float(lines[1])
 run_length = float(lines[2])
-savepath = lines[3].replace('CCD', 'webcam') + '\\'
+savepath = lines[3]
 filename = lines[4] + lines[5]
 
 # Create webcam save folder
