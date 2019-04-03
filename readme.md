@@ -9,9 +9,9 @@ This repository seeks to improve on current FLIR documentation for use of their 
 - This code automatically detects how many cameras are connected, and assumes you want to use all of them. If you don't want to, make sure to disconnect the USB cable.
 - Make sure to use a hardware trigger compatible with the camera you are using. For the Blackfly S, a 3.3V square wave is sufficient, as long as the duty cycle isn't too short. I initially accomplished this with a function generator, but whatever signal you would like to use is fine.
 - The params.txt file dictates (in this order)
-1) How many images will be saved
-2) The exposure time of the camera in seconds (which can limit the framerate)
-3) The length of the run (unused for now, btu useful for auxillary purposes)
+1) How many images to be captured (per camera)
+2) The exposure time of the camera in seconds
+3) The length of the run (unused for now, but useful for auxillary purposes such as DAQ boards and other external measurements)
 4) The folder for image storage
 5) The prefix of the filename
 - The outputted .txt file also keeps record of frametimes, just in case you want to check for any dropped frames, frametime inconsistencies, or are capturing in a non-linear fashion.
