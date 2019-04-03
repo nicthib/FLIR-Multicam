@@ -96,7 +96,7 @@ class ThreadCapture(threading.Thread):
                 image_result.Release()
 
             except PySpin.SpinnakerException as ex:
-                print('Error (577): %s' % ex)
+                print('Error at image acquisition loop: %s' % ex)
                 return False
         t2 = time.time()
         self.cam.EndAcquisition()
@@ -261,7 +261,7 @@ def configure_cam(cam, verbose):
             print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
 
     except PySpin.SpinnakerException as ex:
-        print('Error (237): %s' % ex)
+        print('Error at configure_cam: %s' % ex)
         return False
 
     return result
@@ -302,7 +302,7 @@ def reset_trigger(cam):
         node_trigger_mode.SetIntValue(node_trigger_mode_off.GetValue())
 
     except PySpin.SpinnakerException as ex:
-        print('Error (663): %s' % ex)
+        print('Error at reset_trigger: %s' % ex)
         result = False
         
     return result
