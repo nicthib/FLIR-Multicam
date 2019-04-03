@@ -294,7 +294,7 @@ def main():
     if num_cameras == 0:
         cam_list.Clear()
         system.ReleaseInstance()
-        print('Not enough cameras! Goodbye.')
+        print('Not enough cameras. Goodbye :(')
         return False
     else:
         run_cameras(cam_list)
