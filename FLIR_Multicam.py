@@ -1,3 +1,4 @@
+# Added functionality for personal use - Arduino and DAQ messing about
 import os
 import time
 import threading
