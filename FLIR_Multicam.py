@@ -17,7 +17,7 @@ num_images = int(round(float(lines[0])))
 exp_time = float(lines[1])
 run_length = float(lines[2])
 savepath = lines[3]
-filename = lines[4] + lines[5]
+filename = lines[4]
 
 # Create webcam save folder
 if not os.path.exists(savepath):
