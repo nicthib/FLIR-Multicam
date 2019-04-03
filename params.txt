@@ -1,5 +1,5 @@
 1200
 0.0067968
 20.0333
-C:\test\testA
-runA_stim
+C:\test\test1
+test1
