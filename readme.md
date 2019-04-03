@@ -15,6 +15,7 @@ This repository seeks to improve on current FLIR documentation for use of their 
 4) The folder for image storage
 5) The prefix of the filename
 - The outputted .txt file also keeps record of frametimes, just in case you want to check for any dropped frames, frametime inconsistencies, or are capturing in a non-linear fashion.
+- This implementation uses the primary hardware trigger for all cameras, instead of a secondary trigger via the pull-up resistor configuration. This is unneccesary, since you can simply send the same hardware signal to all cameras, and they will activate simultaneously. This also simplifies the code, as all cameras operate with the same trigger settings.
 
 ## Conclusions
 
