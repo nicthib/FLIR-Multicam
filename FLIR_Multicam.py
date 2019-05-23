@@ -5,38 +5,60 @@ import PySpin
 import serial
 import re
 import sys
+import psutil
+#import nidaqmx as ni
+#import numpy as np
 
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=12')
 
-# Read webcam params .txt file
-with open('params.txt') as f:
+# Read webcam params file
+with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
     lines = f.readlines()
 lines = [x.strip() for x in lines]
 num_images = int(round(float(lines[0])))
 exp_time = float(lines[1])
-run_length = float(lines[2])
-savepath = lines[3]
-filename = lines[4]
+#bin_val = 2 bin mode (WIP)
+savepath = lines[2].replace('CCD', 'webcam') + '\\'
+filename = lines[3] + lines[4]
 
 # Create webcam save folder
 if not os.path.exists(savepath):
     os.makedirs(savepath)
 os.chdir(savepath)
 
+# Com port for Arduino communication
+COM_port = 'COM10'
+COM_baud = 115200
+
+# Set up auxiliary behavior collection
+try:
+    ser = serial.Serial(COM_port, COM_baud)
+    ser_avail = 1
+except serial.SerialException:
+    print('Serial port ' + COM_port + ' not available. No auxiliary behavior will be recorded.')
+    ser_avail = 0
+
+# Set up NIDAQ (WIP)
+# daq_fs = 10000
+# with ni.Task() as task:
+#     task.ai_channels.add_ai_voltage_chan("Dev2/ai0")
+#     task.read(number_of_samples_per_channel=2)
+
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
 class ThreadWrite(threading.Thread):
-    def __init__(self, data, out): 
+    def __init__(self, data, out):
         threading.Thread.__init__(self)  
         self.data = data
         self.out = out
-  
-    def run(self): 
-        self.data.Save(self.out)
 
+    def run(self):
+        image_result = self.data
+        image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
+        image_converted.Save(self.out)
 
-# Capturing is also threaded to increase performance. Not totally necessary
+# Capturing is also threaded, to increase performance
 class ThreadCapture(threading.Thread):
     def __init__(self, cam, camnum):
         threading.Thread.__init__(self)
@@ -50,6 +72,7 @@ class ThreadCapture(threading.Thread):
             primary = 0
         times = []
         rotary_data = []
+        cpu_data = []
         t1 = []
         for i in range(num_images):
             try:
@@ -62,17 +85,20 @@ class ThreadCapture(threading.Thread):
                     print('*** ACQUISITION STARTED ***\n')
 
                 if primary:
-                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images), end='\r')
+                    if ser_avail:
+                        rotary_data.append(ser.readline())
+                    cpu_data.append(str(psutil.cpu_percent()))
+                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images) + ', CPU' + cpu_data[-1] + ' %', end='\r')
                     sys.stdout.flush()
 
-                image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
+                #image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
                 fullfilename = filename + '_' + str(i+1) + '_cam' + str(primary) + '.jpg'
-                background = ThreadWrite(image_converted, fullfilename)
+                background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
 
             except PySpin.SpinnakerException as ex:
-                print('Error at image aquisition loop: %s' % ex)
+                print('Error (577): %s' % ex)
                 return False
         t2 = time.time()
         self.cam.EndAcquisition()
@@ -80,7 +106,20 @@ class ThreadCapture(threading.Thread):
             print('Effective frame rate: ' + str(num_images / (t2 - t1)))
         with open(savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
-                t.write(item + ',\n')            
+                t.write(item + ',\n')
+        if primary:
+            if ser_avail == 1:
+                with open(savepath + filename + '_r.txt', 'a') as r:
+                    for item in rotary_data:
+                        try:
+                            d_item = item[0:len(item) - 2].decode("utf-8")
+                        except UnicodeDecodeError:
+                            d_item = '0 0 0'
+                        d_num = re.findall(r'([\d.]*\d+)', d_item)
+                        r.write(' '.join(d_num) + ',\n')
+            with open(savepath + filename + '_cpu.txt', 'a') as c:
+                for item in cpu_data:
+                    c.write(item + ',\n')
 
 
 def configure_cam(cam, verbose):
@@ -180,6 +219,21 @@ def configure_cam(cam, verbose):
         # Set new buffer value
         buffer_count.SetValue(1000)
 
+        # # Retrieve and modify horiz bin mode
+        # bin_horiz = PySpin.CIntegerPtr(nodemap.GetNode('BinningHorizontal'))
+        # if not PySpin.IsAvailable(bin_horiz) or not PySpin.IsWritable(bin_horiz):
+        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
+        #     return False
+        #
+        # bin_vert = PySpin.CIntegerPtr(nodemap.GetNode('BinningVertical'))
+        # if not PySpin.IsAvailable(bin_vert) or not PySpin.IsWritable(bin_vert):
+        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
+        #     return False
+        #
+        # # Set new bin value
+        # bin_horiz.SetValue(bin_val)
+        # bin_vert.SetValue(bin_val)
+
         # Access trigger overlap info
         node_trigger_overlap = PySpin.CEnumerationPtr(nodemap.GetNode('TriggerOverlap'))
         if not PySpin.IsAvailable(node_trigger_overlap) or not PySpin.IsWritable(node_trigger_overlap):
@@ -221,19 +275,19 @@ def configure_cam(cam, verbose):
             print('Unable to get exposure time. Aborting...')
             return False
 
-        # Set exposure float value. Note that this is in microseconds, not ms.
+        # Set exposure float value
         node_exposure_time.SetValue(exp_time * 1000000)
         if verbose == 0:
             print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
 
     except PySpin.SpinnakerException as ex:
-        print('Error at configure_cam: %s' % ex)
+        print('Error (237): %s' % ex)
         return False
 
     return result
 
 
-def run_cameras(camlist):
+def config_and_acquire(camlist):
     thread = []
     for i, cam in enumerate(camlist):
         cam.Init()
@@ -245,6 +299,16 @@ def run_cameras(camlist):
     print('*** WAITING FOR FIRST TRIGGER... ***\n')
     for t in thread:
         t.join()
+
+    for i, cam in enumerate(camlist):
+        reset_trigger(cam)
+        cam.DeInit()
+
+# Config camera params, but don't begin acquisition
+def config_and_return(camlist):
+    for i, cam in enumerate(camlist):
+        cam.Init()
+        configure_cam(cam, i)
 
     for i, cam in enumerate(camlist):
         reset_trigger(cam)
@@ -268,7 +332,7 @@ def reset_trigger(cam):
         node_trigger_mode.SetIntValue(node_trigger_mode_off.GetValue())
 
     except PySpin.SpinnakerException as ex:
-        print('Error at reset_trigger: %s' % ex)
+        print('Error (663): %s' % ex)
         result = False
         
     return result
@@ -294,14 +358,26 @@ def main():
     if num_cameras == 0:
         cam_list.Clear()
         system.ReleaseInstance()
-        print('Not enough cameras. Goodbye :(')
+        print('Not enough cameras! Goodbye.')
         return False
+    elif num_cameras > 0 and int(sys.argv[1]) == 1:
+        config_and_acquire(cam_list)
     else:
-        run_cameras(cam_list)
+        config_and_return(cam_list)
 
     # Clear cameras and release system instance
     cam_list.Clear()
     system.ReleaseInstance()
+
+    # Close serial connection
+    if ser_avail:
+        ser.close()
+
+    # Write DAQ data (WIP)
+    # data = np.zeros((daq_fs*run_length,), dtype=np.float64)
+    # read = nidaq.int32()
+    # task.ReadAnalogF64(daq_fs, run_length, nidaq.DAQmx_Val_GroupByChannel,
+    #                 data, len(data), nidaq.byref(read), None)
 
     print('DONE')
     time.sleep(1)
