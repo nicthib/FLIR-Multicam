@@ -5,15 +5,12 @@ import PySpin
 import serial
 import re
 import sys
-import psutil
-#import nidaqmx as ni
-#import numpy as np
 
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=12')
 
 # Read webcam params file
-with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
+with open('params.txt') as f:
     lines = f.readlines()
 lines = [x.strip() for x in lines]
 num_images = int(round(float(lines[0])))
@@ -26,24 +23,6 @@ filename = lines[3] + lines[4]
 if not os.path.exists(savepath):
     os.makedirs(savepath)
 os.chdir(savepath)
-
-# Com port for Arduino communication
-COM_port = 'COM10'
-COM_baud = 115200
-
-# Set up auxiliary behavior collection
-try:
-    ser = serial.Serial(COM_port, COM_baud)
-    ser_avail = 1
-except serial.SerialException:
-    print('Serial port ' + COM_port + ' not available. No auxiliary behavior will be recorded.')
-    ser_avail = 0
-
-# Set up NIDAQ (WIP)
-# daq_fs = 10000
-# with ni.Task() as task:
-#     task.ai_channels.add_ai_voltage_chan("Dev2/ai0")
-#     task.read(number_of_samples_per_channel=2)
 
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
@@ -72,7 +51,6 @@ class ThreadCapture(threading.Thread):
             primary = 0
         times = []
         rotary_data = []
-        cpu_data = []
         t1 = []
         for i in range(num_images):
             try:
@@ -83,13 +61,6 @@ class ThreadCapture(threading.Thread):
                     # task.read()
                     t1 = time.time()
                     print('*** ACQUISITION STARTED ***\n')
-
-                if primary:
-                    if ser_avail:
-                        rotary_data.append(ser.readline())
-                    cpu_data.append(str(psutil.cpu_percent()))
-                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images) + ', CPU' + cpu_data[-1] + ' %', end='\r')
-                    sys.stdout.flush()
 
                 #image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
                 fullfilename = filename + '_' + str(i+1) + '_cam' + str(primary) + '.jpg'
@@ -107,20 +78,6 @@ class ThreadCapture(threading.Thread):
         with open(savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
                 t.write(item + ',\n')
-        if primary:
-            if ser_avail == 1:
-                with open(savepath + filename + '_r.txt', 'a') as r:
-                    for item in rotary_data:
-                        try:
-                            d_item = item[0:len(item) - 2].decode("utf-8")
-                        except UnicodeDecodeError:
-                            d_item = '0 0 0'
-                        d_num = re.findall(r'([\d.]*\d+)', d_item)
-                        r.write(' '.join(d_num) + ',\n')
-            with open(savepath + filename + '_cpu.txt', 'a') as c:
-                for item in cpu_data:
-                    c.write(item + ',\n')
-
 
 def configure_cam(cam, verbose):
     result = True
@@ -281,7 +238,7 @@ def configure_cam(cam, verbose):
             print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
 
     except PySpin.SpinnakerException as ex:
-        print('Error (237): %s' % ex)
+        print('Error (configure_cam): %s' % ex)
         return False
 
     return result
@@ -332,7 +289,7 @@ def reset_trigger(cam):
         node_trigger_mode.SetIntValue(node_trigger_mode_off.GetValue())
 
     except PySpin.SpinnakerException as ex:
-        print('Error (663): %s' % ex)
+        print('Error (reset_trigger): %s' % ex)
         result = False
         
     return result
@@ -368,16 +325,6 @@ def main():
     # Clear cameras and release system instance
     cam_list.Clear()
     system.ReleaseInstance()
-
-    # Close serial connection
-    if ser_avail:
-        ser.close()
-
-    # Write DAQ data (WIP)
-    # data = np.zeros((daq_fs*run_length,), dtype=np.float64)
-    # read = nidaq.int32()
-    # task.ReadAnalogF64(daq_fs, run_length, nidaq.DAQmx_Val_GroupByChannel,
-    #                 data, len(data), nidaq.byref(read), None)
 
     print('DONE')
     time.sleep(1)
