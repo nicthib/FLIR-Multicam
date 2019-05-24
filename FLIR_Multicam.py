@@ -2,7 +2,6 @@ import os
 import time
 import threading
 import PySpin
-import serial
 import re
 import sys
 
