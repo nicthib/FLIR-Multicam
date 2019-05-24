@@ -20,6 +20,6 @@ This repository seeks to improve on current FLIR documentation for use of their 
 
 ## Conclusions
 
-This code is really useful for science and computer vision applications. Many people use multi-camera setups in my field of behavioral research, and these cameras are a powerhouse when it comes to high-throughput imaging in a small form factor.
+This code is really useful for science and computer vision applications. Many people use multi-camera setups in my field of behavioral neuroscience research, and these cameras are a powerhouse when it comes to high-throughput imaging in a small form factor.
 
 Thanks for reading!
