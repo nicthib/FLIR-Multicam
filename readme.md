@@ -2,6 +2,12 @@
 
 This repository seeks to improve on current FLIR documentation for use of their robust and open-source cameras. This code was specifically created to be used on multi-camera setups running at "high" speeds (60 fps or so). While many FLIR cameras boast a high free-running FPS, saving captured images can be a challenge. This code improves on their provided approach by offloading a lot of the work via multithreading.
 
+## How to use
+
+1. Clone this repository and run the command ``FLIR_Multicam.py 1``. The boolean argument at the end indicates if you want to capture images or simply set the camera parameters. Use ``FLIR_Multicam.py 0`` to just set parameters.
+2. Update ``params.txt`` with the relevant information needed for your acquisition (explained in more detail in the next section).
+3. ``FLIR_Multicam.py`` needs the ``params.txt`` fileto work properly, so make sure to either run this command within the repository folder, or update the path to ``params.txt`` in FLIR_multicam.py (Line 12).
+
 ## Important things to know
 
 - Make sure to have PySpin installed - you can find the Python packages [here](https://www.ptgrey.com/support/downloads). Currently, the official release is supported on Python 3.6, which I used for this implementation. 
@@ -13,7 +19,7 @@ This repository seeks to improve on current FLIR documentation for use of their 
 2) The exposure time of the camera in seconds
 3) The length of the run (unused for now, but useful for auxillary purposes such as DAQ boards and other external measurements)
 4) The folder for image storage
-5) The prefix of the filename
+5) The image filename(s)
 - The outputted .txt file also keeps record of frametimes, just in case you want to check for any dropped frames, frametime inconsistencies, or are capturing in a non-linear fashion.
 - This implementation uses the primary hardware trigger for all cameras, instead of a secondary trigger via the pull-up resistor configuration. This is unneccesary, since you can simply send the same hardware signal to all cameras, and they will activate simultaneously. This also simplifies the code, as all cameras operate with the same trigger settings.
 - Make sure to monitor your CPU usage while collecting. You'll get significant frametime inconsistencies if it's exceeding 85% or so.
