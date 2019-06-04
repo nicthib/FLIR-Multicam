@@ -11,7 +11,7 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
-# Personal verison for Hillman lab, wfom 2 computer.
+# Personal verison for Hillman lab, wfom 2 computer
 
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=12')
