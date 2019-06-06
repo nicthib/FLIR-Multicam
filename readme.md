@@ -4,9 +4,10 @@ This repository seeks to improve on current FLIR documentation for use of their 
 
 ## How to use
 
-1. Clone this repository and run the command ``FLIR_Multicam.py 1``. The boolean argument at the end indicates if you want to capture images or simply set the camera parameters. Use ``FLIR_Multicam.py 0`` to just set parameters.
+1. Clone this repository
 2. Update ``params.txt`` with the relevant information needed for your acquisition (explained in more detail in the next section).
 3. ``FLIR_Multicam.py`` needs the ``params.txt`` file to work properly, so make sure to either run this command within the repository folder, or update the path to ``params.txt`` in FLIR_multicam.py (Line 12).
+4. Run the command ``FLIR_Multicam.py 1``. The boolean argument at the end indicates if you want to capture images or simply set the camera parameters. Use ``FLIR_Multicam.py 0`` to just set parameters.
 
 ## Important things to know
 
