@@ -44,7 +44,7 @@ dname = os.path.dirname(abspath)
 os.chdir(dname)
 
 # Read cfg file
-cfg = read_config('params.yaml')
+cfg = read_config('params_WFOM.yaml')
 num_images = cfg['num_images']
 run_length = cfg['run_length']
 exp_time = cfg['exp_time']
