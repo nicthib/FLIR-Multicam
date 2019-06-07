@@ -44,11 +44,12 @@ os.chdir(dname)
 # Read cfg file
 cfg = read_config('params.yaml')
 num_images = cfg['num_images']
-run_length = cfg['run_length']
 exp_time = cfg['exp_time']
 bin_val = int(1)  # bin mode (WIP)
-im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
-aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
+if cfg['file_path'] == 0:
+    im_savepath = os.path.join(dname, 'images')
+else:
+    im_savepath = cfg['file_path']
 filename = cfg['file_name'] + str(cfg['stim_run'])
 framerate = cfg['framerate']
 
@@ -132,7 +133,7 @@ class ThreadCapture(threading.Thread):
         if primary:
             print('Effective frame rate: ' + str(num_images / (t2 - t1)))
         # Save frametime data
-        with open(aux_savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
+        with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
                 t.write(item + ',\n')
 
@@ -243,26 +244,26 @@ def configure_cam(cam, verbose):
         # Set new buffer value
         buffer_count.SetValue(1000)
 
-        # Retrieve and modify resolution
-        node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
-        if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
-            width_to_set = int(1440 / bin_val)
-            node_width.SetValue(width_to_set)
-            if verbose == 0:
-                print('Width set to %i...' % node_width.GetValue())
-        else:
-            if verbose == 0:
-                print('Width not available, width is %i...' % node_width.GetValue())
-
-        node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
-        if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
-            height_to_set = int(1080 / bin_val)
-            node_height.SetValue(height_to_set)
-            if verbose == 0:
-                print('Height set to %i...' % node_height.GetValue())
-        else:
-            if verbose == 0:
-                print('Width not available, height is %i...' % node_height.GetValue())
+        # Retrieve and modify resolution (WIP)
+        # node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
+        # if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
+        #     width_to_set = int(1440 / bin_val)
+        #     node_width.SetValue(width_to_set)
+        #     if verbose == 0:
+        #         print('Width set to %i...' % node_width.GetValue())
+        # else:
+        #     if verbose == 0:
+        #         print('Width not available, width is %i...' % node_width.GetValue())
+        #
+        # node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
+        # if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
+        #     height_to_set = int(1080 / bin_val)
+        #     node_height.SetValue(height_to_set)
+        #     if verbose == 0:
+        #         print('Height set to %i...' % node_height.GetValue())
+        # else:
+        #     if verbose == 0:
+        #         print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
         node_trigger_overlap = PySpin.CEnumerationPtr(nodemap.GetNode('TriggerOverlap'))

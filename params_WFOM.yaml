@@ -1,0 +1,6 @@
+num_images: 300
+exp_time: 0.0067968
+file_path: s:\test\CCD\runA
+file_name: runA_stim
+stim_run: 1
+framerate: hardware
