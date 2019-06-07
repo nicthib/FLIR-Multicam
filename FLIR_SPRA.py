@@ -33,18 +33,20 @@ def read_config(configname):
     else:
         raise FileNotFoundError ("Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
     return(cfg)
-# This makes the terminal nicely sized
-os.system('mode con: cols=50 lines=12')
 
+# This makes the terminal nicely sized
+os.system('mode con: cols=50 lines=16')
+
+# Legacy code for txt reading
+#with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
+#    lines = f.readlines()
+#lines = [x.strip() for x in lines]
 # Read webcam params file
 cfg = read_config('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.yaml')
-with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
-    lines = f.readlines()
-lines = [x.strip() for x in lines]
 num_images = cfg['num_images']
 run_length = cfg['run_length']
 exp_time = cfg['exp_time']
-bin_val = 2  # bin mode (WIP)
+bin_val = int(1)  # bin mode (WIP)
 im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
 aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
 filename = cfg['file_name'] + str(cfg['stim_run'])
@@ -85,7 +87,7 @@ try:
     ai_task.timing.cfg_samp_clk_timing(fs,
                                        sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
                                        samps_per_chan=DAQ_ns)
-    ao_task.write(np.linspace(0, 10, DAQ_ns), auto_start=False)
+    ao_task.write(np.linspace(0, 0, DAQ_ns), auto_start=False)
 
     print('DAQ setup successful.')
     DAQ_online = 1
@@ -272,20 +274,26 @@ def configure_cam(cam, verbose):
         # Set new buffer value
         buffer_count.SetValue(1000)
 
-        # # Retrieve and modify horiz bin mode
-        # bin_horiz = PySpin.CIntegerPtr(nodemap.GetNode('BinningHorizontal'))
-        # if not PySpin.IsAvailable(bin_horiz) or not PySpin.IsWritable(bin_horiz):
-        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
-        #     return False
-        #
-        # bin_vert = PySpin.CIntegerPtr(nodemap.GetNode('BinningVertical'))
-        # if not PySpin.IsAvailable(bin_vert) or not PySpin.IsWritable(bin_vert):
-        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
-        #     return False
-        #
-        # # Set new bin value
-        # bin_horiz.SetValue(bin_val)
-        # bin_vert.SetValue(bin_val)
+        # Retrieve and modify resolution
+        node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
+        if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
+            width_to_set = int(1440/bin_val)
+            node_width.SetValue(width_to_set)
+            if verbose == 0:
+                print('Width set to %i...' % node_width.GetValue())
+        else:
+            if verbose == 0:
+                print('Width not available, width is %i...' % node_width.GetValue())
+
+        node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
+        if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
+            height_to_set = int(1080/bin_val)
+            node_height.SetValue(height_to_set)
+            if verbose == 0:
+                print('Height set to %i...' % node_height.GetValue())
+        else:
+            if verbose == 0:
+                print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
         node_trigger_overlap = PySpin.CEnumerationPtr(nodemap.GetNode('TriggerOverlap'))
