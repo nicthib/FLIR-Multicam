@@ -10,23 +10,44 @@ import nidaqmx
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
+import yaml
+import ruamel.yaml
+from pathlib import Path
 
 # Personal verison for Hillman lab, wfom 2 computer
-
+def read_config(configname):
+    """
+    Reads structured config file
+    """
+    ruamelFile = ruamel.yaml.YAML()
+    path = Path(configname)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                cfg = ruamelFile.load(f)
+        except Exception as err:
+            if err.args[2] == "could not determine a constructor for the tag '!!python/tuple'":
+                with open(path, 'r') as ymlfile:
+                  cfg = yaml.load(ymlfile,Loader=yaml.SafeLoader)
+                  write_config(configname,cfg)
+    else:
+        raise FileNotFoundError ("Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
+    return(cfg)
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=12')
 
 # Read webcam params file
+cfg = read_config('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.yaml')
 with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
     lines = f.readlines()
 lines = [x.strip() for x in lines]
-num_images = int(round(float(lines[0])))
-run_length = float(lines[1])
-exp_time = float(lines[2])
+num_images = cfg['num_images']
+run_length = cfg['run_length']
+exp_time = cfg['exp_time']
 bin_val = 2  # bin mode (WIP)
-im_savepath = lines[3].replace('CCD', 'webcam') + '\\'
-aux_savepath = lines[3].replace('CCD', 'auxillary') + '\\'
-filename = lines[4] + lines[5]
+im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
+aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
+filename = cfg['file_name'] + str(cfg['stim_run'])
 
 # Create webcam and aux save folder
 if not os.path.exists(im_savepath):
