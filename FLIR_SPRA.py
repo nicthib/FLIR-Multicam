@@ -14,7 +14,8 @@ import yaml
 import ruamel.yaml
 from pathlib import Path
 
-# Personal verison for Hillman lab, wfom 2 computer
+
+# Personal verison for Hillman lab
 def read_config(configname):
     """
     Reads structured config file
@@ -37,12 +38,13 @@ def read_config(configname):
 # This makes the terminal nicely sized
 os.system('mode con: cols=50 lines=16')
 
-# Legacy code for txt reading
-#with open('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.txt') as f:
-#    lines = f.readlines()
-#lines = [x.strip() for x in lines]
-# Read webcam params file
-cfg = read_config('C:\Mohammed\SPLASSH_Zyla_NEW\python_scripts\webcam_fcns\webcamparams.yaml')
+# Change cwd to script folder
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
+# Read cfg file
+cfg = read_config('params.yaml')
 num_images = cfg['num_images']
 run_length = cfg['run_length']
 exp_time = cfg['exp_time']
@@ -50,6 +52,7 @@ bin_val = int(1)  # bin mode (WIP)
 im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
 aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
 filename = cfg['file_name'] + str(cfg['stim_run'])
+framerate = cfg['framerate']
 
 # Create webcam and aux save folder
 if not os.path.exists(im_savepath):
@@ -110,7 +113,7 @@ class ThreadWrite(threading.Thread):
 
 # Capturing is also threaded, to increase performance
 class ThreadCapture(threading.Thread):
-    def __init__(self, cam, camnum):
+    def __init__(self, cam, camnum, nodemap):
         threading.Thread.__init__(self)
         self.cam = cam
         self.camnum = camnum
@@ -118,6 +121,9 @@ class ThreadCapture(threading.Thread):
     def run(self):
         times = []
         t1 = []
+        if framerate != 'hardware':
+            nodemap = self.cam.GetNodeMap()
+
         if self.camnum == 0:
             primary = 1
             rotary_data = []
@@ -126,9 +132,20 @@ class ThreadCapture(threading.Thread):
             primary = 0
 
         for i in range(num_images):
+            fstart = time.time()
             try:
                 #  Retrieve next received image
-                image_result = self.cam.GetNextImage()
+                if framerate == 'hardware':
+                    image_result = self.cam.GetNextImage()
+                else:
+                    node_softwaretrigger_cmd = PySpin.CCommandPtr(nodemap.GetNode('TriggerSoftware'))
+                    if not PySpin.IsAvailable(node_softwaretrigger_cmd) or not PySpin.IsWritable(
+                            node_softwaretrigger_cmd):
+                        print('Unable to execute trigger. Aborting...')
+                        return False
+                    node_softwaretrigger_cmd.Execute()
+                    image_result = self.cam.GetNextImage()
+
                 times.append(str(time.time()))
                 if i == 0 and primary == 1:
                     t1 = time.time()
@@ -136,7 +153,8 @@ class ThreadCapture(threading.Thread):
                     if DAQ_online:
                         ao_task.start()
                         ai_task.start()
-
+                if i == int(num_images - 1) and primary == 1:
+                    t2 = time.time()
                 if primary:
                     if ser_avail:
                         rotary_data.append(ser.readline())
@@ -148,11 +166,15 @@ class ThreadCapture(threading.Thread):
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
+                ftime = time.time() - fstart
+                if framerate != 'hardware':
+                    if ftime < 1/framerate:
+                        time.sleep(1/framerate - ftime)
 
             except PySpin.SpinnakerException as ex:
                 print('Error (577): %s' % ex)
                 return False
-        t2 = time.time()
+
         self.cam.EndAcquisition()
         if primary:
             print('Effective frame rate: ' + str(num_images / (t2 - t1)))
@@ -204,12 +226,21 @@ def configure_cam(cam, verbose):
             return False
 
         # Set primary camera trigger source to line0 (hardware trigger)
-        node_trigger_source_hardware = node_trigger_source.GetEntryByName('Line0')
-        if not PySpin.IsAvailable(node_trigger_source_hardware) or not PySpin.IsReadable(
-                node_trigger_source_hardware):
+        if framerate == 'hardware':
+            node_trigger_source_set = node_trigger_source.GetEntryByName('Line0')
+            if verbose == 0:
+                print('Trigger source set to hardware...\n')
+        else:
+            node_trigger_source_set = node_trigger_source.GetEntryByName('Software')
+            if verbose == 0:
+                print('Trigger source set to software, framerate = %i...\n' % framerate)
+
+        if not PySpin.IsAvailable(node_trigger_source_set) or not PySpin.IsReadable(
+                node_trigger_source_set):
             print('Unable to set trigger source (enum entry retrieval). Aborting...')
             return False
-        node_trigger_source.SetIntValue(node_trigger_source_hardware.GetValue())
+
+        node_trigger_source.SetIntValue(node_trigger_source_set.GetValue())
         node_trigger_mode_on = node_trigger_mode.GetEntryByName('On')
 
         if not PySpin.IsAvailable(node_trigger_mode_on) or not PySpin.IsReadable(node_trigger_mode_on):
@@ -302,10 +333,14 @@ def configure_cam(cam, verbose):
             return False
 
         # Retrieve enumeration for trigger overlap Read Out
-        node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('ReadOut')
+        if framerate == 'hardware':
+            node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('ReadOut')
+        else:
+            node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('Off')
+
         if not PySpin.IsAvailable(node_trigger_overlap_ro) or not PySpin.IsReadable(
                 node_trigger_overlap_ro):
-            print('Unable to set trigger overlap to "Read Out" (entry retrieval). Aborting...')
+            print('Unable to set trigger overlap (entry retrieval). Aborting...')
             return False
 
         # Retrieve integer value from enumeration
@@ -353,11 +388,14 @@ def config_and_acquire(camlist):
     for i, cam in enumerate(camlist):
         cam.Init()
         configure_cam(cam, i)
+        nodemap = cam.GetNodeMap()
         cam.BeginAcquisition()
-        thread.append(ThreadCapture(cam, i))
+        thread.append(ThreadCapture(cam, i, nodemap))
         thread[i].start()
 
-    print('*** WAITING FOR FIRST TRIGGER... ***\n')
+    if framerate == 'hardware':
+        print('*** WAITING FOR FIRST TRIGGER... ***\n')
+
     for t in thread:
         t.join()
 

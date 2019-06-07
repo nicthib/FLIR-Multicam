@@ -1,82 +1,141 @@
 import os
 import time
 import threading
-import PySpin
 import re
 import sys
+import PySpin
+import psutil
+import numpy as np
+import yaml
+import ruamel.yaml
+from pathlib import Path
+
+
+# Version for general use
+def read_config(configname):
+    """
+    Reads structured config file
+    """
+    ruamelFile = ruamel.yaml.YAML()
+    path = Path(configname)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                cfg = ruamelFile.load(f)
+        except Exception as err:
+            if err.args[2] == "could not determine a constructor for the tag '!!python/tuple'":
+                with open(path, 'r') as ymlfile:
+                    cfg = yaml.load(ymlfile, Loader=yaml.SafeLoader)
+                    write_config(configname, cfg)
+    else:
+        raise FileNotFoundError(
+            "Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
+    return (cfg)
+
 
 # This makes the terminal nicely sized
-os.system('mode con: cols=50 lines=12')
+os.system('mode con: cols=50 lines=16')
 
-# Read webcam params file
-with open('params.txt') as f:
-    lines = f.readlines()
-lines = [x.strip() for x in lines]
-num_images = int(round(float(lines[0])))
-exp_time = float(lines[1])
-#bin_val = 2 bin mode (WIP)
-savepath = lines[2].replace('CCD', 'webcam') + '\\'
-filename = lines[3] + lines[4]
+# Change cwd to script folder
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
 
-# Create webcam save folder
-if not os.path.exists(savepath):
-    os.makedirs(savepath)
-os.chdir(savepath)
+# Read cfg file
+cfg = read_config('params.yaml')
+num_images = cfg['num_images']
+run_length = cfg['run_length']
+exp_time = cfg['exp_time']
+bin_val = int(1)  # bin mode (WIP)
+im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
+aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
+filename = cfg['file_name'] + str(cfg['stim_run'])
+framerate = cfg['framerate']
+
+# Create webcam and aux save folder
+if not os.path.exists(im_savepath):
+    os.makedirs(im_savepath)
+os.chdir(im_savepath)
 
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
 class ThreadWrite(threading.Thread):
     def __init__(self, data, out):
-        threading.Thread.__init__(self)  
+        threading.Thread.__init__(self)
         self.data = data
         self.out = out
 
     def run(self):
-        image_result = self.data
-        image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
-        image_converted.Save(self.out)
+        # image_result = self.data
+        # image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
+        self.data.Save(self.out)
+
 
 # Capturing is also threaded, to increase performance
 class ThreadCapture(threading.Thread):
-    def __init__(self, cam, camnum):
+    def __init__(self, cam, camnum, nodemap):
         threading.Thread.__init__(self)
         self.cam = cam
         self.camnum = camnum
 
     def run(self):
+        times = []
+        t1 = []
+        if framerate != 'hardware':
+            nodemap = self.cam.GetNodeMap()
+
         if self.camnum == 0:
             primary = 1
         else:
             primary = 0
-        times = []
-        rotary_data = []
-        t1 = []
+
         for i in range(num_images):
+            fstart = time.time()
             try:
                 #  Retrieve next received image
-                image_result = self.cam.GetNextImage()
+                if framerate == 'hardware':
+                    image_result = self.cam.GetNextImage()
+                else:
+                    node_softwaretrigger_cmd = PySpin.CCommandPtr(nodemap.GetNode('TriggerSoftware'))
+                    if not PySpin.IsAvailable(node_softwaretrigger_cmd) or not PySpin.IsWritable(
+                            node_softwaretrigger_cmd):
+                        print('Unable to execute trigger. Aborting...')
+                        return False
+                    node_softwaretrigger_cmd.Execute()
+                    image_result = self.cam.GetNextImage()
+
                 times.append(str(time.time()))
                 if i == 0 and primary == 1:
-                    # task.read()
                     t1 = time.time()
                     print('*** ACQUISITION STARTED ***\n')
 
-                #image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
-                fullfilename = filename + '_' + str(i+1) + '_cam' + str(primary) + '.jpg'
+                if i == int(num_images - 1) and primary == 1:
+                    t2 = time.time()
+                if primary:
+                    print('COLLECTING IMAGE ' + str(i + 1) + ' of ' + str(num_images), end='\r')
+                    sys.stdout.flush()
+
+                fullfilename = filename + '_' + str(i + 1) + '_cam' + str(primary) + '.jpg'
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
+                ftime = time.time() - fstart
+                if framerate != 'hardware':
+                    if ftime < 1 / framerate:
+                        time.sleep(1 / framerate - ftime)
 
             except PySpin.SpinnakerException as ex:
                 print('Error (577): %s' % ex)
                 return False
-        t2 = time.time()
+
         self.cam.EndAcquisition()
         if primary:
             print('Effective frame rate: ' + str(num_images / (t2 - t1)))
-        with open(savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
+        # Save frametime data
+        with open(aux_savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
                 t.write(item + ',\n')
+
 
 def configure_cam(cam, verbose):
     result = True
@@ -105,12 +164,21 @@ def configure_cam(cam, verbose):
             return False
 
         # Set primary camera trigger source to line0 (hardware trigger)
-        node_trigger_source_hardware = node_trigger_source.GetEntryByName('Line0')
-        if not PySpin.IsAvailable(node_trigger_source_hardware) or not PySpin.IsReadable(
-                node_trigger_source_hardware):
+        if framerate == 'hardware':
+            node_trigger_source_set = node_trigger_source.GetEntryByName('Line0')
+            if verbose == 0:
+                print('Trigger source set to hardware...\n')
+        else:
+            node_trigger_source_set = node_trigger_source.GetEntryByName('Software')
+            if verbose == 0:
+                print('Trigger source set to software, framerate = %i...\n' % framerate)
+
+        if not PySpin.IsAvailable(node_trigger_source_set) or not PySpin.IsReadable(
+                node_trigger_source_set):
             print('Unable to set trigger source (enum entry retrieval). Aborting...')
             return False
-        node_trigger_source.SetIntValue(node_trigger_source_hardware.GetValue())
+
+        node_trigger_source.SetIntValue(node_trigger_source_set.GetValue())
         node_trigger_mode_on = node_trigger_mode.GetEntryByName('On')
 
         if not PySpin.IsAvailable(node_trigger_mode_on) or not PySpin.IsReadable(node_trigger_mode_on):
@@ -175,20 +243,26 @@ def configure_cam(cam, verbose):
         # Set new buffer value
         buffer_count.SetValue(1000)
 
-        # # Retrieve and modify horiz bin mode
-        # bin_horiz = PySpin.CIntegerPtr(nodemap.GetNode('BinningHorizontal'))
-        # if not PySpin.IsAvailable(bin_horiz) or not PySpin.IsWritable(bin_horiz):
-        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
-        #     return False
-        #
-        # bin_vert = PySpin.CIntegerPtr(nodemap.GetNode('BinningVertical'))
-        # if not PySpin.IsAvailable(bin_vert) or not PySpin.IsWritable(bin_vert):
-        #     print('Unable to set Bin mode (Integer node retrieval). Aborting...\n')
-        #     return False
-        #
-        # # Set new bin value
-        # bin_horiz.SetValue(bin_val)
-        # bin_vert.SetValue(bin_val)
+        # Retrieve and modify resolution
+        node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
+        if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
+            width_to_set = int(1440 / bin_val)
+            node_width.SetValue(width_to_set)
+            if verbose == 0:
+                print('Width set to %i...' % node_width.GetValue())
+        else:
+            if verbose == 0:
+                print('Width not available, width is %i...' % node_width.GetValue())
+
+        node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
+        if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
+            height_to_set = int(1080 / bin_val)
+            node_height.SetValue(height_to_set)
+            if verbose == 0:
+                print('Height set to %i...' % node_height.GetValue())
+        else:
+            if verbose == 0:
+                print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
         node_trigger_overlap = PySpin.CEnumerationPtr(nodemap.GetNode('TriggerOverlap'))
@@ -197,10 +271,14 @@ def configure_cam(cam, verbose):
             return False
 
         # Retrieve enumeration for trigger overlap Read Out
-        node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('ReadOut')
+        if framerate == 'hardware':
+            node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('ReadOut')
+        else:
+            node_trigger_overlap_ro = node_trigger_overlap.GetEntryByName('Off')
+
         if not PySpin.IsAvailable(node_trigger_overlap_ro) or not PySpin.IsReadable(
                 node_trigger_overlap_ro):
-            print('Unable to set trigger overlap to "Read Out" (entry retrieval). Aborting...')
+            print('Unable to set trigger overlap (entry retrieval). Aborting...')
             return False
 
         # Retrieve integer value from enumeration
@@ -234,10 +312,10 @@ def configure_cam(cam, verbose):
         # Set exposure float value
         node_exposure_time.SetValue(exp_time * 1000000)
         if verbose == 0:
-            print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
+            print('Exposure time set to ' + str(exp_time * 1000) + 'ms...')
 
     except PySpin.SpinnakerException as ex:
-        print('Error (configure_cam): %s' % ex)
+        print('Error (237): %s' % ex)
         return False
 
     return result
@@ -248,17 +326,21 @@ def config_and_acquire(camlist):
     for i, cam in enumerate(camlist):
         cam.Init()
         configure_cam(cam, i)
+        nodemap = cam.GetNodeMap()
         cam.BeginAcquisition()
-        thread.append(ThreadCapture(cam, i))
+        thread.append(ThreadCapture(cam, i, nodemap))
         thread[i].start()
 
-    print('*** WAITING FOR FIRST TRIGGER... ***\n')
+    if framerate == 'hardware':
+        print('*** WAITING FOR FIRST TRIGGER... ***\n')
+
     for t in thread:
         t.join()
 
     for i, cam in enumerate(camlist):
         reset_trigger(cam)
         cam.DeInit()
+
 
 # Config camera params, but don't begin acquisition
 def config_and_return(camlist):
@@ -284,13 +366,13 @@ def reset_trigger(cam):
         if not PySpin.IsAvailable(node_trigger_mode_off) or not PySpin.IsReadable(node_trigger_mode_off):
             print('Unable to disable trigger mode (enum entry retrieval). Aborting...')
             return False
-        
+
         node_trigger_mode.SetIntValue(node_trigger_mode_off.GetValue())
 
     except PySpin.SpinnakerException as ex:
-        print('Error (reset_trigger): %s' % ex)
+        print('Error (663): %s' % ex)
         result = False
-        
+
     return result
 
 
@@ -326,12 +408,11 @@ def main():
     system.ReleaseInstance()
 
     print('DONE')
-    time.sleep(1)
+    time.sleep(.5)
     print('Goodbye :)')
     time.sleep(2)
     return result
 
 
 if __name__ == '__main__':
-
     main()
