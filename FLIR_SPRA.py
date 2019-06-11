@@ -75,28 +75,30 @@ except serial.SerialException:
     ser_avail = 0
 
 # Set up DAQ
-try:
-    nchans = 2
-    fs = 10**4
-    DAQ_ns = int(fs * run_length)
-    ai_task = nidaqmx.Task()
-    ao_task = nidaqmx.Task()
-    ai_task.ai_channels.add_ai_voltage_chan(physical_channel='/Dev2/ai0', min_val=0, max_val=5)
-    ai_task.ai_channels.add_ai_voltage_chan(physical_channel='/Dev2/ai1', min_val=0, max_val=5)
-    ao_task.ao_channels.add_ao_voltage_chan('/Dev2/ao0')
-    ao_task.timing.cfg_samp_clk_timing(fs,
-                                       sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
-                                       samps_per_chan=DAQ_ns)
-    ai_task.timing.cfg_samp_clk_timing(fs,
-                                       sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
-                                       samps_per_chan=DAQ_ns)
-    ao_task.write(np.linspace(0, 0, DAQ_ns), auto_start=False)
+DAQ_online = 0
+if sys.argv[1] == 1:
+    try:
+        nchans = 3
+        fs = 10**4
+        DAQ_ns = int(fs * run_length)
+        ai_task = nidaqmx.Task()
+        ao_task = nidaqmx.Task()
+        ai_task.ai_channels.add_ai_voltage_chan(physical_channel='/Dev2/ai0', min_val=0, max_val=5)
+        ai_task.ai_channels.add_ai_voltage_chan(physical_channel='/Dev2/ai1', min_val=0, max_val=5)
+        ai_task.ai_channels.add_ai_voltage_chan(physical_channel='/Dev2/ai2', min_val=0, max_val=5)
+        ao_task.ao_channels.add_ao_voltage_chan('/Dev2/ao0')
+        ao_task.timing.cfg_samp_clk_timing(fs,
+                                           sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
+                                           samps_per_chan=DAQ_ns)
+        ai_task.timing.cfg_samp_clk_timing(fs,
+                                           sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
+                                           samps_per_chan=DAQ_ns)
+        ao_task.write(np.linspace(0, 0, DAQ_ns), auto_start=False)
 
-    print('DAQ setup successful.')
-    DAQ_online = 1
-except:
-    print('DAQ setup unsuccessful. No DAQ data will be recorded')
-    DAQ_online = 0
+        print('DAQ setup successful.')
+        DAQ_online = 1
+    except:
+        print('DAQ setup unsuccessful. No DAQ data will be recorded')
 
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
@@ -473,7 +475,7 @@ def main():
         ser.close()
 
     # Write DAQ data (WIP)
-    if DAQ_online:
+    if DAQ_online and sys.argv[1] == 1:
         data = ai_task.read(number_of_samples_per_channel=DAQ_ns)
         DAQdata = np.asarray(data)
         # Create plot of DAQ data
