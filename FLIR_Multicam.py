@@ -34,7 +34,7 @@ def read_config(configname):
 
 
 # This makes the terminal nicely sized
-os.system('mode con: cols=50 lines=16')
+#os.system('mode con: cols=50 lines=16')
 
 # Change cwd to script folder
 abspath = os.path.abspath(__file__)
