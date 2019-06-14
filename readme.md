@@ -11,7 +11,7 @@ This repository seeks to improve on current FLIR documentation for use of their 
 ## Important things to know
 
 - Make sure to have PySpin installed - you can find the Python packages [here](https://www.ptgrey.com/support/downloads). Currently, the official release is supported on Python 3.6, which I used for this implementation. 
-- I wrote this code to be used specifically with the [Blackfly S Mono 1.6 MP USB3 Vision](https://www.ptgrey.com/blackfly-s-mono-16-mp-usb3-vision-sony-imx273), but the API is very flexible and should work with most of their USB cameras.
+- I wrote this code to be used specifically with the [Blackfly S Mono 1.6 MP USB3 Vision](https://www.flir.com/products/blackfly-s-usb3/?model=BFS-U3-16S2M-CS), but the API is very flexible and should work with most of their USB cameras.
 - This code automatically detects how many cameras are connected, and assumes you want to use all of them. If you don't want to, make sure to disconnect the USB cable.
 - Make sure to use a hardware trigger compatible with the camera you are using. For the Blackfly S, a 3.3V square wave is sufficient, as long as the duty cycle isn't too short. I initially accomplished this with a function generator, but whatever signal you would like to use is fine. (Note that for most Blackfly S cameras, the black wire is the input and the blue wire is ground).
 - The params.yaml file can be edited, but make sure to keep the fieldnames the same to prevent any errors. The "framerate" field can be set to "hardware" for extrenal hardware triggering, or a number for freerun mode.
