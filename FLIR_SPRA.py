@@ -3,14 +3,11 @@ import time
 import threading
 import PySpin
 import serial
-import re
 import sys
-import psutil
 import nidaqmx
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
-import yaml
 import ruamel.yaml
 from pathlib import Path
 
@@ -27,10 +24,7 @@ def read_config(configname):
             with open(path, 'r') as f:
                 cfg = ruamelFile.load(f)
         except Exception as err:
-            if err.args[2] == "could not determine a constructor for the tag '!!python/tuple'":
-                with open(path, 'r') as ymlfile:
-                  cfg = yaml.load(ymlfile,Loader=yaml.SafeLoader)
-                  write_config(configname,cfg)
+            pass
     else:
         raise FileNotFoundError ("Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
     return(cfg)
@@ -76,7 +70,7 @@ except serial.SerialException:
 
 # Set up DAQ
 DAQ_online = 0
-if sys.argv[1] == 1:
+if int(sys.argv[1]) == 1:
     try:
         nchans = 3
         fs = 10**4
@@ -99,6 +93,7 @@ if sys.argv[1] == 1:
         DAQ_online = 1
     except:
         print('DAQ setup unsuccessful. No DAQ data will be recorded')
+
 
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
@@ -129,7 +124,6 @@ class ThreadCapture(threading.Thread):
         if self.camnum == 0:
             primary = 1
             rotary_data = []
-            cpu_data = []
         else:
             primary = 0
 
@@ -148,7 +142,7 @@ class ThreadCapture(threading.Thread):
                     node_softwaretrigger_cmd.Execute()
                     image_result = self.cam.GetNextImage()
 
-                times.append(str(time.time()))
+                times.append(time.time())
                 if i == 0 and primary == 1:
                     t1 = time.time()
                     print('*** ACQUISITION STARTED ***\n')
@@ -159,9 +153,10 @@ class ThreadCapture(threading.Thread):
                     t2 = time.time()
                 if primary:
                     if ser_avail:
+                        ser.readline()  # have to do this twice to get a full line
                         rotary_data.append(ser.readline())
-                    cpu_data.append(str(psutil.cpu_percent()))
-                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images) + ', CPU' + cpu_data[-1] + ' %', end='\r')
+                        ser.flushInput()
+                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images), end='\r')
                     sys.stdout.flush()
 
                 fullfilename = filename + '_' + str(i+1) + '_cam' + str(primary) + '.jpg'
@@ -180,25 +175,24 @@ class ThreadCapture(threading.Thread):
         self.cam.EndAcquisition()
         if primary:
             print('Effective frame rate: ' + str(num_images / (t2 - t1)))
+
         # Save frametime data
-        with open(aux_savepath + filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
-            for item in times:
-                t.write(item + ',\n')
-        if primary:
-            if ser_avail == 1:
+        sio.savemat(os.path.join(aux_savepath,'t'+str(self.camnum)+'.mat'), {'t'+str(self.camnum): np.asarray(times)})
+        if primary and ser_avail:
                 # Save rotary data
-                with open(aux_savepath + filename + '_r.txt', 'a') as r:
-                    for item in rotary_data:
-                        try:
-                            d_item = item[0:len(item) - 2].decode("utf-8")
-                        except UnicodeDecodeError:
-                            d_item = '0 0 0'
-                        d_num = re.findall(r'([\d.]*\d+)', d_item)
-                        r.write(' '.join(d_num) + ',\n')
-            with open(aux_savepath + filename + '_cpu.txt', 'a') as c:
-                # Save cpu data
-                for item in cpu_data:
-                    c.write(item + ',\n')
+                aux_data = []
+                for item in rotary_data:
+                    try:
+                        d_item = item[0:len(item) - 2].decode("utf-8")
+                    except UnicodeDecodeError:
+                        d_item = '0 0 0'
+                    aux_data.append(list(map(int, d_item.split(' '))))
+                aux_data = np.asarray(aux_data)
+                sio.savemat(os.path.join(aux_savepath, filename+'_b.mat'), {'aux': aux_data})
+                # Save rotary fig (WIP)
+                # t = np.linspace(0, run_length, num=len(aux_data))
+                # plt.plot(t, np.transpose(aux_data[1, :]))
+                # plt.savefig(aux_savepath + filename + '_DAQ.png')
 
 
 def configure_cam(cam, verbose):
@@ -307,26 +301,26 @@ def configure_cam(cam, verbose):
         # Set new buffer value
         buffer_count.SetValue(1000)
 
-        # Retrieve and modify resolution
-        node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
-        if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
-            width_to_set = int(1440/bin_val)
-            node_width.SetValue(width_to_set)
-            if verbose == 0:
-                print('Width set to %i...' % node_width.GetValue())
-        else:
-            if verbose == 0:
-                print('Width not available, width is %i...' % node_width.GetValue())
+        # # Retrieve and modify resolution
+        # node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
+        # if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
+        #     width_to_set = int(1440/bin_val)
+        #     node_width.SetValue(width_to_set)
+        #     if verbose == 0:
+        #         print('Width set to %i...' % node_width.GetValue())
+        # else:
+        #     if verbose == 0:
+        #         print('Width not available, width is %i...' % node_width.GetValue())
 
-        node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
-        if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
-            height_to_set = int(1080/bin_val)
-            node_height.SetValue(height_to_set)
-            if verbose == 0:
-                print('Height set to %i...' % node_height.GetValue())
-        else:
-            if verbose == 0:
-                print('Width not available, height is %i...' % node_height.GetValue())
+        # node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
+        # if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
+        #     height_to_set = int(1080/bin_val)
+        #     node_height.SetValue(height_to_set)
+        #     if verbose == 0:
+        #         print('Height set to %i...' % node_height.GetValue())
+        # else:
+        #     if verbose == 0:
+        #         print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
         node_trigger_overlap = PySpin.CEnumerationPtr(nodemap.GetNode('TriggerOverlap'))
@@ -474,18 +468,23 @@ def main():
     if ser_avail:
         ser.close()
 
-    # Write DAQ data (WIP)
-    if DAQ_online and sys.argv[1] == 1:
+    # Save DAQ data
+    if DAQ_online and int(sys.argv[1]) == 1:
         data = ai_task.read(number_of_samples_per_channel=DAQ_ns)
         DAQdata = np.asarray(data)
+
         # Create plot of DAQ data
         t = np.linspace(0, .5, num=fs//2)
         plt.plot(t, np.transpose(DAQdata[:, 0:fs//2]))
-        #plt.show()
-        plt.savefig(aux_savepath+filename+'.png')
+        plt.savefig(aux_savepath+filename+'_DAQ.png')
+
+        # Write DAQ data to .mat file
         sio.savemat(aux_savepath+filename+'_DAQ.mat', {'DAQdata': DAQdata})
+
+        # Close DAQ tasks
         ai_task.close()
         ao_task.close()
+        print('DAQ data saved. \n')
 
     print('DONE')
     time.sleep(.5)
