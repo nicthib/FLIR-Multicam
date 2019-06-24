@@ -1,7 +1,7 @@
 num_images: 35941
 run_length: 600.013
 exp_time: 0.0067968
-file_path: s:\cm126_1\CCD\runJ
+file_path: s:\cm127_1\CCD\runJ
 file_name: runJ_stim
 stim_run: 1
 framerate: hardware
