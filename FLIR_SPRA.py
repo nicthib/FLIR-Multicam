@@ -29,9 +29,6 @@ def read_config(configname):
         raise FileNotFoundError ("Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
     return(cfg)
 
-# This makes the terminal nicely sized
-os.system('mode con: cols=50 lines=16')
-
 # Change cwd to script folder
 abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
@@ -47,6 +44,10 @@ im_savepath = cfg['file_path'].replace('CCD', 'webcam') + '\\'
 aux_savepath = cfg['file_path'].replace('CCD', 'auxillary') + '\\'
 filename = cfg['file_name'] + str(cfg['stim_run'])
 framerate = cfg['framerate']
+
+# This makes the terminal nicely sized
+if cfg['small_console'] == 1:
+    os.system('mode con: cols=60 lines=16')
 
 # Create webcam and aux save folder
 if not os.path.exists(im_savepath):
@@ -87,9 +88,17 @@ if int(sys.argv[1]) == 1:
         ai_task.timing.cfg_samp_clk_timing(fs,
                                            sample_mode=nidaqmx.constants.AcquisitionType.FINITE,
                                            samps_per_chan=DAQ_ns)
-        ao_task.write(np.linspace(0, 0, DAQ_ns), auto_start=False)
+        # Load stim file
+        if cfg['stim'] != 'off':
+            mat_contents = sio.loadmat(r'C:\FLIR_Multi_Cam_HWTrig\stimfiles\rstim'+str(cfg['stim'])+'.mat')
+            stim = np.squeeze(mat_contents['DAQout'])
+            ao_task.write(stim, auto_start=False)
+            print('DAQ setup successful. Stim is ENABLED')
 
-        print('DAQ setup successful.')
+        else:
+            ao_task.write(np.linspace(0, 0, DAQ_ns), auto_start=False)
+            print('DAQ setup successful. Stim is DISABLED')
+
         DAQ_online = 1
     except:
         print('DAQ setup unsuccessful. No DAQ data will be recorded')
@@ -149,14 +158,23 @@ class ThreadCapture(threading.Thread):
                     if DAQ_online:
                         ao_task.start()
                         ai_task.start()
-                if i == int(num_images - 1) and primary == 1:
+                if i == int(num_images - 1) and primary:
                     t2 = time.time()
                 if primary:
+                    # Read serial values (primary cam only)
                     if ser_avail:
                         ser.readline()  # have to do this twice to get a full line
                         rotary_data.append(ser.readline())
                         ser.flushInput()
-                    print('COLLECTING IMAGE ' + str(i+1) + ' of ' + str(num_images), end='\r')
+
+                    # Determine if stim is on or off
+                    if stim[int((time.time()-t1)*fs)] > 0:
+                        stimstate = 'ON '
+                    else:
+                        stimstate = 'OFF'
+
+                    # Display progress
+                    print('COLLECTING {} of {}, time = {} sec, stim is {}'.format(str(i+1), str(num_images), str(int(time.time()-t1)), stimstate), end='\r')
                     sys.stdout.flush()
 
                 fullfilename = filename + '_' + str(i+1) + '_cam' + str(primary) + '.jpg'
@@ -195,9 +213,13 @@ class ThreadCapture(threading.Thread):
                 # plt.savefig(aux_savepath + filename + '_DAQ.png')
 
 
-def configure_cam(cam, verbose):
+def configure_cam(cam, camnum):
     result = True
-    if verbose == 0:
+    verbose = 0
+    if camnum == 0 and cfg['verbose']:
+        verbose = 1
+
+    if verbose:
         print('*** CONFIGURING CAMERA(S) ***\n')
     try:
         nodemap = cam.GetNodeMap()
@@ -224,11 +246,11 @@ def configure_cam(cam, verbose):
         # Set primary camera trigger source to line0 (hardware trigger)
         if framerate == 'hardware':
             node_trigger_source_set = node_trigger_source.GetEntryByName('Line0')
-            if verbose == 0:
+            if verbose:
                 print('Trigger source set to hardware...\n')
         else:
             node_trigger_source_set = node_trigger_source.GetEntryByName('Software')
-            if verbose == 0:
+            if verbose:
                 print('Trigger source set to software, framerate = %i...\n' % framerate)
 
         if not PySpin.IsAvailable(node_trigger_source_set) or not PySpin.IsReadable(
@@ -306,20 +328,20 @@ def configure_cam(cam, verbose):
         # if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
         #     width_to_set = int(1440/bin_val)
         #     node_width.SetValue(width_to_set)
-        #     if verbose == 0:
+        #     if verbose:
         #         print('Width set to %i...' % node_width.GetValue())
         # else:
-        #     if verbose == 0:
+        #     if verbose:
         #         print('Width not available, width is %i...' % node_width.GetValue())
 
         # node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
         # if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
         #     height_to_set = int(1080/bin_val)
         #     node_height.SetValue(height_to_set)
-        #     if verbose == 0:
+        #     if verbose:
         #         print('Height set to %i...' % node_height.GetValue())
         # else:
-        #     if verbose == 0:
+        #     if verbose:
         #         print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
@@ -369,7 +391,7 @@ def configure_cam(cam, verbose):
 
         # Set exposure float value
         node_exposure_time.SetValue(exp_time * 1000000)
-        if verbose == 0:
+        if verbose:
             print('Exposure time set to ' + str(exp_time*1000) + 'ms...')
 
     except PySpin.SpinnakerException as ex:
