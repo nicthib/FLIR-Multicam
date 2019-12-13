@@ -90,7 +90,7 @@ if int(sys.argv[1]) == 1:
                                            samps_per_chan=DAQ_ns)
         # Load stim file
         if cfg['stim'] != 'off':
-            mat_contents = sio.loadmat(r'C:\FLIR_Multi_Cam_HWTrig\stimfiles\rstim'+str(cfg['stim'])+'.mat')
+            mat_contents = sio.loadmat(r'C:\FLIR_Multi_Cam_HWTrig\stimfiles\stim'+str(cfg['stim'])+'.mat')
             stim = np.squeeze(mat_contents['DAQout'])
             ao_task.write(stim, auto_start=False)
             print('DAQ setup successful. Stim is ENABLED')
@@ -127,6 +127,7 @@ class ThreadCapture(threading.Thread):
     def run(self):
         times = []
         t1 = []
+        stimstate = 'OFF'
         if framerate != 'hardware':
             nodemap = self.cam.GetNodeMap()
 
@@ -168,10 +169,13 @@ class ThreadCapture(threading.Thread):
                         ser.flushInput()
 
                     # Determine if stim is on or off
-                    if stim[int((time.time()-t1)*fs)] > 0:
-                        stimstate = 'ON '
-                    else:
-                        stimstate = 'OFF'
+                    try:
+                        if stim[int((time.time()-t1)*fs)] > 0:
+                            stimstate = 'ON '
+                        else:
+                            stimstate = 'OFF'
+                    except:
+                        pass
 
                     # Display progress
                     print('COLLECTING {} of {}, time = {} sec, stim is {}'.format(str(i+1), str(num_images), str(int(time.time()-t1)), stimstate), end='\r')
@@ -207,10 +211,6 @@ class ThreadCapture(threading.Thread):
                     aux_data.append(list(map(int, d_item.split(' '))))
                 aux_data = np.asarray(aux_data)
                 sio.savemat(os.path.join(aux_savepath, filename+'_b.mat'), {'aux': aux_data})
-                # Save rotary fig (WIP)
-                # t = np.linspace(0, run_length, num=len(aux_data))
-                # plt.plot(t, np.transpose(aux_data[1, :]))
-                # plt.savefig(aux_savepath + filename + '_DAQ.png')
 
 
 def configure_cam(cam, camnum):

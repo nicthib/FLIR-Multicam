@@ -1,11 +1,8 @@
 import os
 import time
 import threading
-import re
 import sys
 import PySpin
-import psutil
-import numpy as np
 import yaml
 import ruamel.yaml
 from pathlib import Path
@@ -31,10 +28,6 @@ def read_config(configname):
         raise FileNotFoundError(
             "Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
     return (cfg)
-
-
-# This makes the terminal nicely sized
-#os.system('mode con: cols=50 lines=16')
 
 # Change cwd to script folder
 abspath = os.path.abspath(__file__)
