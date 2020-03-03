@@ -1,8 +1,8 @@
-num_images: 60358
-run_length: 1200.01
-exp_time: 0.009984
-file_path: s:\cm155_4\CCD\runE
-file_name: runE_stim
+num_images: 35942
+run_length: 600.03
+exp_time: 0.0067968
+file_path: s:\cm161_30\CCD\runF
+file_name: runF_stim
 stim_run: 1
 framerate: hardware
 stim: off
