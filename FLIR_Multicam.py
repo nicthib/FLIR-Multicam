@@ -34,13 +34,17 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
+# overwrite with config file from axon
+try: os.system("scp 192.168.1.205:/home/snel/git/FLIR_Multi_Cam_HWTrig/params.yaml /home/snel/git/FLIR_Multi_Cam_HWTrig/params.yaml")
+except: import warnings; warnings.warn("Could not get remote 'params.yaml', using local configuration file.")
+
 # Read cfg file
 cfg = read_config('params.yaml')
 num_images = cfg['num_images']
 exp_time = cfg['exp_time']
 bin_val = int(1)  # bin mode (WIP)
 if cfg['file_path'] == 0:
-    im_savepath = os.path.join(dname, 'images')
+    im_savepath = os.path.join(dname, 'images'+time.strftime("%y%m%d"))
 else:
     im_savepath = cfg['file_path']
 filename = cfg['file_name'] + str(cfg['stim_run'])
@@ -106,10 +110,12 @@ class ThreadCapture(threading.Thread):
                 if i == int(num_images - 1) and primary == 1:
                     t2 = time.time()
                 if primary:
-                    print('COLLECTING IMAGE ' + str(i + 1) + ' of ' + str(num_images), end='\r')
+                    # using .zfill to add leading zeros to frame idx, for better compatibility with ffmpeg commands
+                    print('COLLECTING IMAGE ' + str(i + 1).zfill(len(str(num_images))) + ' of ' + str(num_images), end='\r') 
                     sys.stdout.flush()
-
-                fullfilename = filename + '_' + str(i + 1) + '_cam' + str(primary) + '.jpg'
+                    
+                # using .zfill to add leading zeros to frame idx, for better compatibility with ffmpeg commands
+                fullfilename = filename + '_' + str(i + 1).zfill(len(str(num_images))) + '_cam' + str(self.camnum) + '.jpg'
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
@@ -157,9 +163,9 @@ def configure_cam(cam, verbose):
             print('Unable to get trigger source 163 (node retrieval). Aborting...')
             return False
 
-        # Set primary camera trigger source to line0 (hardware trigger)
+        # Set primary camera trigger source to line0 or line3 (hardware trigger)
         if framerate == 'hardware':
-            node_trigger_source_set = node_trigger_source.GetEntryByName('Line0')
+            node_trigger_source_set = node_trigger_source.GetEntryByName('Line3')
             if verbose == 0:
                 print('Trigger source set to hardware...\n')
         else:
@@ -235,7 +241,7 @@ def configure_cam(cam, verbose):
             return False
 
         # Set new buffer value
-        buffer_count.SetValue(1000)
+        buffer_count.SetValue(buffer_count.GetMax())
 
         # Retrieve and modify resolution (WIP)
         # node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
@@ -383,6 +389,7 @@ def main():
     result = True
     system = PySpin.System.GetInstance()
     cam_list = system.GetCameras()
+    print(cam_list)
     num_cameras = cam_list.GetSize()
 
     print('Number of cameras detected: %d' % num_cameras)
@@ -404,7 +411,7 @@ def main():
     print('DONE')
     time.sleep(.5)
     print('Goodbye :)')
-    time.sleep(2)
+    time.sleep(.5)
     return result
 
 
