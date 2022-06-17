@@ -60,6 +60,7 @@ class ThreadWrite(threading.Thread):
         self.out = out
 
     def run(self):
+        # These commands are legacy, and not needed (kept for documentation)
         # image_result = self.data
         # image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
         self.data.Save(self.out)
@@ -308,6 +309,7 @@ def configure_cam(cam, verbose):
         if verbose == 0:
             print('Exposure time set to ' + str(exp_time * 1000) + 'ms...')
 
+    # General exception
     except PySpin.SpinnakerException as ex:
         print('Error (237): %s' % ex)
         return False
@@ -346,7 +348,7 @@ def config_and_return(camlist):
         reset_trigger(cam)
         cam.DeInit()
 
-
+# Trigger reset
 def reset_trigger(cam):
     nodemap = cam.GetNodeMap()
     try:
@@ -369,7 +371,7 @@ def reset_trigger(cam):
 
     return result
 
-
+# Main writing loop
 def main():
     # Check write permissions
     try:
