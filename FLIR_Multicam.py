@@ -7,7 +7,6 @@ import yaml
 import ruamel.yaml
 from pathlib import Path
 
-
 # Version for general use
 def read_config(configname):
     """
@@ -34,7 +33,7 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-# Read cfg file
+# Read cfg yaml file
 cfg = read_config('params.yaml')
 num_images = cfg['num_images']
 exp_time = cfg['exp_time']
@@ -110,11 +109,13 @@ class ThreadCapture(threading.Thread):
                     print('COLLECTING IMAGE ' + str(i + 1) + ' of ' + str(num_images), end='\r')
                     sys.stdout.flush()
 
+                # Compose filename, write image to disk
                 fullfilename = filename + '_' + str(i + 1) + '_cam' + str(primary) + '.jpg'
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
                 ftime = time.time() - fstart
+                # Framerate sync
                 if framerate != 'hardware':
                     if ftime < 1 / framerate:
                         time.sleep(1 / framerate - ftime)
@@ -130,7 +131,6 @@ class ThreadCapture(threading.Thread):
         with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
                 t.write(item + ',\n')
-
 
 def configure_cam(cam, verbose):
     result = True
@@ -389,6 +389,7 @@ def main():
 
     print('Number of cameras detected: %d' % num_cameras)
 
+    # Multicamera handling
     if num_cameras == 0:
         cam_list.Clear()
         system.ReleaseInstance()
@@ -408,7 +409,6 @@ def main():
     print('Goodbye :)')
     time.sleep(2)
     return result
-
 
 if __name__ == '__main__':
     main()
