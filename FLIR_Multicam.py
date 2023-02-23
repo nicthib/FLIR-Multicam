@@ -7,6 +7,7 @@ import PySpin
 import yaml
 import ruamel.yaml
 from pathlib import Path
+from numpy import mean, std, diff, round 
 
 # Version for general use
 def read_config(configname):
@@ -23,7 +24,7 @@ def read_config(configname):
             if err.args[2] == "could not determine a constructor for the tag '!!python/tuple'":
                 with open(path, 'r') as ymlfile:
                     cfg = yaml.load(ymlfile, Loader=yaml.SafeLoader)
-                    write_config(configname, cfg)
+                    # write_config(configname, cfg)
     else:
         raise FileNotFoundError(
             "Config file is not found. Please make sure that the file exists and/or there are no unnecessary spaces in the path of the config file!")
@@ -110,7 +111,7 @@ class ThreadCapture(threading.Thread):
                     node_softwaretrigger_cmd.Execute()
                     image_result = self.cam.GetNextImage()
 
-                times.append(str(time.time_ns()))
+                times.append(time.time_ns())
                 if i == 0 and primary == 1:
                     t1 = time.time_ns()
                     print('*** ACQUISITION STARTED ***\n')
@@ -138,15 +139,15 @@ class ThreadCapture(threading.Thread):
 
         self.cam.EndAcquisition()
         if primary:
-            print('Effective frame rate: ' + str(num_images / ((t2 - t1)*1e-9)))
-            print("num_images: ",num_images)
-            print(t2)
-            print(t1)
-            print(t2 - t1)
+            inter_frame_mean = round(mean(diff(times))*1e-6,3) # ms
+            inter_frame_std = round(std(diff(times))*1e-6,3) # ms
+            print("Number of frames captured: ",num_images)
+            print('Software-computed frame rate: ' + str(num_images / ((t2 - t1)*1e-9)))
+            print(f"Software-computed interframe statistics: {inter_frame_mean} +/- {inter_frame_std} ms")
         # Save frametime data
         with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
-                t.write(item + ',\n')
+                t.write(str(item) + ',\n')
 
 def configure_cam(cam, verbose):
     result = True
