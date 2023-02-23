@@ -7,7 +7,6 @@ import PySpin
 import yaml
 import ruamel.yaml
 from pathlib import Path
-from pdb import set_trace
 
 # Version for general use
 def read_config(configname):
@@ -35,11 +34,7 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
-# overwrite with config file from axon
-try: os.system("scp 192.168.1.205:/home/snel/git/FLIR_Multi_Cam_HWTrig/params.yaml /home/snel/git/FLIR_Multi_Cam_HWTrig/params.yaml")
-except: import warnings; warnings.warn("Could not get remote 'params.yaml', using local configuration file.")
-
-# Read cfg file
+# Read cfg yaml file
 cfg = read_config('params.yaml')
 num_images = cfg['num_images']
 exp_time = cfg['exp_time']
@@ -76,6 +71,7 @@ class ThreadWrite(threading.Thread):
         self.out = out
 
     def run(self):
+        # These commands are legacy, and not needed (kept for documentation)
         # image_result = self.data
         # image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
         self.data.Save(self.out)
@@ -151,7 +147,6 @@ class ThreadCapture(threading.Thread):
         with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
                 t.write(item + ',\n')
-
 
 def configure_cam(cam, verbose):
     result = True
@@ -330,6 +325,7 @@ def configure_cam(cam, verbose):
         if verbose == 0:
             print('Exposure time set to ' + str(exp_time * 1000) + 'ms...')
 
+    # General exception
     except PySpin.SpinnakerException as ex:
         print('Error (237): %s' % ex)
         return False
@@ -368,7 +364,7 @@ def config_and_return(camlist):
         reset_trigger(cam)
         cam.DeInit()
 
-
+# Trigger reset
 def reset_trigger(cam):
     nodemap = cam.GetNodeMap()
     try:
@@ -391,7 +387,7 @@ def reset_trigger(cam):
 
     return result
 
-
+# Main writing loop
 def main():
     # Check write permissions
     try:
@@ -410,6 +406,7 @@ def main():
 
     print('Number of cameras detected: %d' % num_cameras)
 
+    # Multicamera handling
     if num_cameras == 0:
         cam_list.Clear()
         system.ReleaseInstance()
@@ -429,7 +426,6 @@ def main():
     print('Goodbye :)')
     time.sleep(.5)
     return result
-
 
 if __name__ == '__main__':
     main()

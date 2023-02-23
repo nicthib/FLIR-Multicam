@@ -1,4 +1,4 @@
-# FLIR cameras and Python: An efficient multi-cam setup using a hardware trigger/freerun capture
+# FLIR Multicam: An efficient multi-cam setup using a hardware trigger/freerun capture and python
 
 This repository seeks to improve on current FLIR documentation for use of their robust and open-source cameras. This code was specifically created to be used on multi-camera setups running at "high" speeds (60 fps or so). While many FLIR cameras boast a high free-running FPS, saving captured images can be a challenge. This code improves on their provided approach by offloading a lot of the work via multithreading.
 
