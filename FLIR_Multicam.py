@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import threading
 import sys
@@ -6,7 +7,7 @@ import PySpin
 import yaml
 import ruamel.yaml
 from pathlib import Path
-
+from pdb import set_trace
 
 # Version for general use
 def read_config(configname):
@@ -44,10 +45,21 @@ num_images = cfg['num_images']
 exp_time = cfg['exp_time']
 bin_val = int(1)  # bin mode (WIP)
 if cfg['file_path'] == 0:
-    im_savepath = os.path.join(dname, 'images'+time.strftime("%y%m%d"))
+    dir_list = os.listdir(dname)
+    timestamp = time.localtime()
+    timestamp = str(timestamp[0])+str(timestamp[1]).zfill(2)+str(timestamp[2]).zfill(2) # get year, month, day
+    new_base_folder_name = 'images'+timestamp
+    largest_recording_number = -1
+    
+    for dir in dir_list:
+        if new_base_folder_name in dir:
+            if int(dir.split('-')[-1]) > largest_recording_number:
+                largest_recording_number = int(dir.split('-')[-1])
+    im_savepath = os.path.join(dname, new_base_folder_name+"-"+str(largest_recording_number+1)) # increment from largest value
 else:
     im_savepath = cfg['file_path']
-filename = cfg['file_name'] + str(cfg['stim_run'])
+orig_filename = cfg['file_name']
+filename = re.sub('_',f"-{largest_recording_number+1}_",orig_filename,count=1)
 framerate = cfg['framerate']
 
 # Create webcam and aux save folder
@@ -88,7 +100,7 @@ class ThreadCapture(threading.Thread):
             primary = 0
 
         for i in range(num_images):
-            fstart = time.time()
+            fstart = time.time_ns()
             try:
                 #  Retrieve next received image
                 if framerate == 'hardware':
@@ -102,13 +114,13 @@ class ThreadCapture(threading.Thread):
                     node_softwaretrigger_cmd.Execute()
                     image_result = self.cam.GetNextImage()
 
-                times.append(str(time.time()))
+                times.append(str(time.time_ns()))
                 if i == 0 and primary == 1:
-                    t1 = time.time()
+                    t1 = time.time_ns()
                     print('*** ACQUISITION STARTED ***\n')
 
                 if i == int(num_images - 1) and primary == 1:
-                    t2 = time.time()
+                    t2 = time.time_ns()
                 if primary:
                     # using .zfill to add leading zeros to frame idx, for better compatibility with ffmpeg commands
                     print('COLLECTING IMAGE ' + str(i + 1).zfill(len(str(num_images))) + ' of ' + str(num_images), end='\r') 
@@ -119,7 +131,7 @@ class ThreadCapture(threading.Thread):
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
-                ftime = time.time() - fstart
+                ftime = time.time_ns() - fstart
                 if framerate != 'hardware':
                     if ftime < 1 / framerate:
                         time.sleep(1 / framerate - ftime)
@@ -130,7 +142,11 @@ class ThreadCapture(threading.Thread):
 
         self.cam.EndAcquisition()
         if primary:
-            print('Effective frame rate: ' + str(num_images / (t2 - t1)))
+            print('Effective frame rate: ' + str(num_images / ((t2 - t1)*1e-9)))
+            print("num_images: ",num_images)
+            print(t2)
+            print(t1)
+            print(t2 - t1)
         # Save frametime data
         with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
