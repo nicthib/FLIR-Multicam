@@ -7,7 +7,7 @@ import PySpin
 import yaml
 import ruamel.yaml
 from pathlib import Path
-from numpy import mean, std, diff, round, argmax, histogram, arange
+from numpy import mean, std, diff, round, argmax, histogram, arange, append
 import termplotlib as tpl
 
 # Version for general use
@@ -140,7 +140,7 @@ class ThreadCapture(threading.Thread):
 
         self.cam.EndAcquisition()
         if primary:
-            frame_diff_times = diff(times)*1e-6
+            frame_diff_times = diff(times)*1e-6 #append(diff(times)*1e-6,15)
             interframe_mean = mean(frame_diff_times) # ms
             round_interframe_mean = int(round(interframe_mean))
             interframe_devs = frame_diff_times-round_interframe_mean # ms
@@ -150,15 +150,15 @@ class ThreadCapture(threading.Thread):
             interframe_max = max(frame_diff_times) # ms
             interframe_min = min(frame_diff_times) # ms
             print("Number of frames captured: ",num_images)
-            print(f'Software-computed frame rate: {str(round(num_images/(t2 - t1)*1e-9,decimals=3))}')
-            print(f"Software-computed interframe statistics: {interframe_mean.round(decimals=3)} +/- {interframe_std.round(decimals=3)} ms")
-            print(f"Largest interframe deviation: {largest_interframe_dev.round(decimals=3)} ms")
+            print(f'Software-computed frame rate: {str(round(num_images/((t2 - t1)*1e-9),decimals=4))}')
+            print(f"Software-computed interframe statistics: {interframe_mean.round(decimals=4)} +/- {interframe_std.round(decimals=4)} ms")
+            print(f"Largest interframe deviation: {largest_interframe_dev.round(decimals=4)} ms")
             print(f"Largest deviation found for frame #: {argmax(abs(interframe_devs))}")
             print(f"Number of deviations more than 0.1ms: {sum(interframe_devs>0.1)}")
             print(f"Number of deviations more than 0.5ms: {sum(interframe_devs>0.5)}")
             print(f"Number of deviations more than 1ms: {sum(interframe_devs>1)}")
             print(f"Number of deviations more than {round_interframe_mean-1}ms (likely dropped frames): {number_of_dropped_frames}")
-            counts, bin_edges = histogram(frame_diff_times, bins=arange(interframe_min,interframe_max,0.1)) # plot fixed 1ms bins
+            counts, bin_edges = histogram(frame_diff_times, bins=arange(interframe_min-0.5,interframe_max+0.5,0.5)) # plot fixed 1ms bins
             fig = tpl.figure()
             fig.hist(counts, bin_edges, orientation="horizontal", force_ascii=False)
             fig.show()
@@ -275,7 +275,7 @@ def configure_cam(cam, verbose):
             print('Unable to set Buffer Count (Integer node retrieval). Aborting...\n')
             return False
 
-        # Set new buffer value
+        # Set new buffer value to the max
         buffer_count.SetValue(buffer_count.GetMax())
 
         # Retrieve and modify resolution (WIP)
@@ -425,7 +425,6 @@ def main():
     result = True
     system = PySpin.System.GetInstance()
     cam_list = system.GetCameras()
-    print(cam_list)
     num_cameras = cam_list.GetSize()
 
     print('Number of cameras detected: %d' % num_cameras)
