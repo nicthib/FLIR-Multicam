@@ -7,7 +7,8 @@ import PySpin
 import yaml
 import ruamel.yaml
 from pathlib import Path
-from numpy import mean, std, diff, round 
+from numpy import mean, std, diff, round, argmax, histogram, arange
+import termplotlib as tpl
 
 # Version for general use
 def read_config(configname):
@@ -55,7 +56,7 @@ if cfg['file_path'] == 0:
 else:
     im_savepath = cfg['file_path']
 orig_filename = cfg['file_name']
-filename = re.sub('_',f"-{largest_recording_number+1}_",orig_filename,count=1)
+filename = re.sub('_',f'-{largest_recording_number+1}_',orig_filename,count=1)
 framerate = cfg['framerate']
 
 # Create webcam and aux save folder
@@ -97,7 +98,7 @@ class ThreadCapture(threading.Thread):
             primary = 0
 
         for i in range(num_images):
-            fstart = time.time_ns()
+            fstart = time.clock_gettime_ns(time.CLOCK_REALTIME)
             try:
                 #  Retrieve next received image
                 if framerate == 'hardware':
@@ -111,13 +112,13 @@ class ThreadCapture(threading.Thread):
                     node_softwaretrigger_cmd.Execute()
                     image_result = self.cam.GetNextImage()
 
-                times.append(time.time_ns())
+                times.append(time.clock_gettime_ns(time.CLOCK_REALTIME))
                 if i == 0 and primary == 1:
-                    t1 = time.time_ns()
+                    t1 = time.clock_gettime_ns(time.CLOCK_REALTIME)
                     print('*** ACQUISITION STARTED ***\n')
 
                 if i == int(num_images - 1) and primary == 1:
-                    t2 = time.time_ns()
+                    t2 = time.clock_gettime_ns(time.CLOCK_REALTIME)
                 if primary:
                     # using .zfill to add leading zeros to frame idx, for better compatibility with ffmpeg commands
                     print('COLLECTING IMAGE ' + str(i + 1).zfill(len(str(num_images))) + ' of ' + str(num_images), end='\r') 
@@ -128,7 +129,7 @@ class ThreadCapture(threading.Thread):
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
-                ftime = time.time_ns() - fstart
+                ftime = time.clock_gettime_ns(time.CLOCK_REALTIME) - fstart
                 if framerate != 'hardware':
                     if ftime < 1 / framerate:
                         time.sleep(1 / framerate - ftime)
@@ -139,11 +140,33 @@ class ThreadCapture(threading.Thread):
 
         self.cam.EndAcquisition()
         if primary:
-            inter_frame_mean = round(mean(diff(times))*1e-6,3) # ms
-            inter_frame_std = round(std(diff(times))*1e-6,3) # ms
+            frame_diff_times = diff(times)*1e-6
+            interframe_mean = mean(frame_diff_times) # ms
+            round_interframe_mean = int(round(interframe_mean))
+            interframe_devs = frame_diff_times-round_interframe_mean # ms
+            largest_interframe_dev = max(interframe_devs, key=abs)
+            number_of_dropped_frames = sum(interframe_devs>=round_interframe_mean-1)
+            interframe_std = std(frame_diff_times) # ms
+            interframe_max = max(frame_diff_times) # ms
+            interframe_min = min(frame_diff_times) # ms
             print("Number of frames captured: ",num_images)
-            print('Software-computed frame rate: ' + str(num_images / ((t2 - t1)*1e-9)))
-            print(f"Software-computed interframe statistics: {inter_frame_mean} +/- {inter_frame_std} ms")
+            print(f'Software-computed frame rate: {str(round(num_images/(t2 - t1)*1e-9,decimals=3))}')
+            print(f"Software-computed interframe statistics: {interframe_mean.round(decimals=3)} +/- {interframe_std.round(decimals=3)} ms")
+            print(f"Largest interframe deviation: {largest_interframe_dev.round(decimals=3)} ms")
+            print(f"Largest deviation found for frame #: {argmax(abs(interframe_devs))}")
+            print(f"Number of deviations more than 0.1ms: {sum(interframe_devs>0.1)}")
+            print(f"Number of deviations more than 0.5ms: {sum(interframe_devs>0.5)}")
+            print(f"Number of deviations more than 1ms: {sum(interframe_devs>1)}")
+            print(f"Number of deviations more than {round_interframe_mean-1}ms (likely dropped frames): {number_of_dropped_frames}")
+            counts, bin_edges = histogram(frame_diff_times, bins=arange(interframe_min,interframe_max,0.1)) # plot fixed 1ms bins
+            fig = tpl.figure()
+            fig.hist(counts, bin_edges, orientation="horizontal", force_ascii=False)
+            fig.show()
+            if number_of_dropped_frames > 0:
+                # color red with \033 stop and color codes
+                print(f'\033[1;31m Weird recording! {number_of_dropped_frames} dropped frame(s) detected. D: \033[0;0m' )
+            else:
+                print('\033[1;32m Good recording! No dropped frames detected. :D \033[0;0m')
         # Save frametime data
         with open(filename + '_t' + str(self.camnum) + '.txt', 'a') as t:
             for item in times:
