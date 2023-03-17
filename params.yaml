@@ -1,5 +1,6 @@
 num_images: 750
 exp_time: 0.004
 file_path: 0
-file_name: yyyymmdd_ratname_speedXX_inclineYY
+file_name: yyyymmdd_name_conditionXX_conditionYY # session number automatically appends to date
 framerate: hardware
+trigger_line: 'Line3'

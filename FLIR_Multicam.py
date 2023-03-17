@@ -40,6 +40,7 @@ os.chdir(dname)
 cfg = read_config('params.yaml')
 num_images = cfg['num_images']
 exp_time = cfg['exp_time']
+trigger_line = cfg['trigger_line']
 bin_val = int(1)  # bin mode (WIP)
 if cfg['file_path'] == 0:
     dir_list = os.listdir(dname)
@@ -48,10 +49,10 @@ if cfg['file_path'] == 0:
     new_base_folder_name = 'images'+timestamp
     largest_recording_number = -1
     
-    for dir in dir_list:
-        if new_base_folder_name in dir:
-            if int(dir.split('-')[-1]) > largest_recording_number:
-                largest_recording_number = int(dir.split('-')[-1])
+    for folder in dir_list:
+        if new_base_folder_name in folder:
+            if int(folder.split('-')[-1]) > largest_recording_number:
+                largest_recording_number = int(folder.split('-')[-1])
     im_savepath = os.path.join(dname, new_base_folder_name+"-"+str(largest_recording_number+1)) # increment from largest value
 else:
     im_savepath = cfg['file_path']
@@ -98,7 +99,7 @@ class ThreadCapture(threading.Thread):
             primary = 0
 
         for i in range(num_images):
-            fstart = time.clock_gettime_ns(time.CLOCK_REALTIME)
+            fstart = time.perf_counter_ns()
             try:
                 #  Retrieve next received image
                 if framerate == 'hardware':
@@ -112,13 +113,13 @@ class ThreadCapture(threading.Thread):
                     node_softwaretrigger_cmd.Execute()
                     image_result = self.cam.GetNextImage()
 
-                times.append(time.clock_gettime_ns(time.CLOCK_REALTIME))
+                times.append(time.perf_counter_ns())
                 if i == 0 and primary == 1:
-                    t1 = time.clock_gettime_ns(time.CLOCK_REALTIME)
+                    t1 = time.perf_counter_ns()
                     print('*** ACQUISITION STARTED ***\n')
 
                 if i == int(num_images - 1) and primary == 1:
-                    t2 = time.clock_gettime_ns(time.CLOCK_REALTIME)
+                    t2 = time.perf_counter_ns()
                 if primary:
                     # using .zfill to add leading zeros to frame idx, for better compatibility with ffmpeg commands
                     print('COLLECTING IMAGE ' + str(i + 1).zfill(len(str(num_images))) + ' of ' + str(num_images), end='\r') 
@@ -129,7 +130,7 @@ class ThreadCapture(threading.Thread):
                 background = ThreadWrite(image_result, fullfilename)
                 background.start()
                 image_result.Release()
-                ftime = time.clock_gettime_ns(time.CLOCK_REALTIME) - fstart
+                ftime = time.perf_counter_ns() - fstart
                 if framerate != 'hardware':
                     if ftime < 1 / framerate:
                         time.sleep(1 / framerate - ftime)
@@ -147,8 +148,8 @@ class ThreadCapture(threading.Thread):
             largest_interframe_dev = max(interframe_devs, key=abs)
             number_of_dropped_frames = sum(interframe_devs>=round_interframe_mean-1)
             interframe_std = std(frame_diff_times) # ms
-            interframe_max = max(frame_diff_times) # ms
-            interframe_min = min(frame_diff_times) # ms
+            # interframe_max = max(frame_diff_times) # ms
+            # interframe_min = min(frame_diff_times) # ms
             print("Number of frames captured: ",num_images)
             print(f'Software-computed frame rate: {str(round(num_images/((t2 - t1)*1e-9),decimals=4))}')
             print(f"Software-computed interframe statistics: {interframe_mean.round(decimals=4)} +/- {interframe_std.round(decimals=4)} ms")
@@ -158,9 +159,9 @@ class ThreadCapture(threading.Thread):
             print(f"Number of deviations more than 0.5ms: {sum(interframe_devs>0.5)}")
             print(f"Number of deviations more than 1ms: {sum(interframe_devs>1)}")
             print(f"Number of deviations more than {round_interframe_mean-1}ms (likely dropped frames): {number_of_dropped_frames}")
-            counts, bin_edges = histogram(frame_diff_times, bins=arange(interframe_min-0.5,interframe_max+0.5,0.5)) # plot fixed 1ms bins
+            counts, bin_edges = histogram(frame_diff_times)#bins=arange(interframe_min-0.2,interframe_max+0.2,0.2)) # keep bin size flexible
             fig = tpl.figure()
-            fig.hist(counts, bin_edges, orientation="horizontal", force_ascii=False)
+            fig.hist(counts, bin_edges,force_ascii=False, orientation="horizontal")
             fig.show()
             if number_of_dropped_frames > 0:
                 # color red with \033 stop and color codes
@@ -172,9 +173,9 @@ class ThreadCapture(threading.Thread):
             for item in times:
                 t.write(str(item) + ',\n')
 
-def configure_cam(cam, verbose):
+def configure_cam(cam, camnum):
     result = True
-    if verbose == 0:
+    if camnum == 0:
         print('*** CONFIGURING CAMERA(S) ***\n')
     try:
         nodemap = cam.GetNodeMap()
@@ -198,14 +199,14 @@ def configure_cam(cam, verbose):
             print('Unable to get trigger source 163 (node retrieval). Aborting...')
             return False
 
-        # Set primary camera trigger source to line0 or line3 (hardware trigger)
+        # Set primary camera trigger source to cfg['trigger_line'] (hardware trigger)
         if framerate == 'hardware':
-            node_trigger_source_set = node_trigger_source.GetEntryByName('Line3')
-            if verbose == 0:
+            node_trigger_source_set = node_trigger_source.GetEntryByName(trigger_line)
+            if camnum == 0:
                 print('Trigger source set to hardware...\n')
         else:
             node_trigger_source_set = node_trigger_source.GetEntryByName('Software')
-            if verbose == 0:
+            if camnum == 0:
                 print('Trigger source set to software, framerate = %i...\n' % framerate)
 
         if not PySpin.IsAvailable(node_trigger_source_set) or not PySpin.IsReadable(
@@ -276,27 +277,32 @@ def configure_cam(cam, verbose):
             return False
 
         # Set new buffer value to the max
-        buffer_count.SetValue(buffer_count.GetMax())
+        max_buffer_count = buffer_count.GetMax()
+        if camnum==0:
+            print(f"Setting buffer count to: {max_buffer_count}")
+        buffer_count.SetValue(max_buffer_count)
 
+        # max_packet_size = cam.DiscoverMaxPacketSize()
+        # from pdb import set_trace; set_trace()
         # Retrieve and modify resolution (WIP)
         # node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
         # if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):
         #     width_to_set = int(1440 / bin_val)
         #     node_width.SetValue(width_to_set)
-        #     if verbose == 0:
+        #     if camnum == 0:
         #         print('Width set to %i...' % node_width.GetValue())
         # else:
-        #     if verbose == 0:
+        #     if camnum == 0:
         #         print('Width not available, width is %i...' % node_width.GetValue())
         #
         # node_height = PySpin.CIntegerPtr(nodemap.GetNode('Height'))
         # if PySpin.IsAvailable(node_height) and PySpin.IsWritable(node_height):
         #     height_to_set = int(1080 / bin_val)
         #     node_height.SetValue(height_to_set)
-        #     if verbose == 0:
+        #     if camnum == 0:
         #         print('Height set to %i...' % node_height.GetValue())
         # else:
-        #     if verbose == 0:
+        #     if camnum == 0:
         #         print('Width not available, height is %i...' % node_height.GetValue())
 
         # Access trigger overlap info
@@ -346,7 +352,7 @@ def configure_cam(cam, verbose):
 
         # Set exposure float value
         node_exposure_time.SetValue(exp_time * 1000000)
-        if verbose == 0:
+        if camnum == 0:
             print('Exposure time set to ' + str(exp_time * 1000) + 'ms...')
 
     # General exception
