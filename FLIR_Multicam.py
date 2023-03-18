@@ -45,8 +45,12 @@ framerate = cfg['framerate']
 trigger_line = cfg['trigger_line']
 bin_val = int(1)  # bin mode (WIP)
 
-# will create folder to store images, which keeps track of date and updates recording session number
-dir_list = os.listdir(dname)
+# will now create folder to store images, which keeps track of date and updates recording session number
+if cfg['file_path'] == 0:
+    file_path = dname # write into repo root directory
+else:
+    file_path = os.path.expanduser(cfg['file_path'])
+dir_list = os.listdir(file_path)
 timestamp = time.localtime()
 timestamp = str(timestamp[0])+str(timestamp[1]).zfill(2)+str(timestamp[2]).zfill(2) # get year, month, day
 new_base_folder_name = 'images'+timestamp
@@ -56,21 +60,17 @@ for folder in dir_list:
     if new_base_folder_name in folder:
         if int(folder.split('-')[-1]) > largest_recording_number:
             largest_recording_number = int(folder.split('-')[-1])
-if cfg['file_path'] == 0:
-    im_savepath = os.path.join(dname, new_base_folder_name+"-"+str(largest_recording_number+1)) # increment from largest value
-else:
-    file_path = os.path.expanduser(cfg['file_path'])
-    im_savepath = os.path.join(file_path, new_base_folder_name+"-"+str(largest_recording_number+1))
+im_savepath = os.path.join(file_path, new_base_folder_name+"-"+str(largest_recording_number+1)) # increment from largest value
+# Create save folder
+if not os.path.exists(im_savepath):
+    os.makedirs(im_savepath)
+os.chdir(im_savepath)
 
 # insert session number into the filename date
 orig_filename = cfg['file_name']
 assert '_' in orig_filename, "Filename should begin with the date and an underscore, e.g., 'yyyymmdd_'"
 filename = re.sub('_',f'-{largest_recording_number+1}_',orig_filename,count=1)
 
-# Create webcam and aux save folder
-if not os.path.exists(im_savepath):
-    os.makedirs(im_savepath)
-os.chdir(im_savepath)
 
 # Thread process for saving images. This is super important, as the writing process takes time inline,
 # so offloading it to separate CPU threads allows continuation of image capture
