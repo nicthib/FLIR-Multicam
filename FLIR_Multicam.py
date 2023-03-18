@@ -9,6 +9,7 @@ import ruamel.yaml
 from pathlib import Path
 from numpy import mean, std, diff, round, argmax, histogram, arange, append
 import termplotlib as tpl
+from colorama import just_fix_windows_console
 
 # Version for general use
 def read_config(configname):
@@ -163,6 +164,8 @@ class ThreadCapture(threading.Thread):
             fig = tpl.figure()
             fig.hist(counts, bin_edges,force_ascii=False, orientation="horizontal")
             fig.show()
+            # use colorama to allow Windows systems to interpret ANSI color codes
+            just_fix_windows_console()
             if number_of_dropped_frames > 0:
                 # color red with \033 stop and color codes
                 print(f'\033[1;31m Weird recording! {number_of_dropped_frames} dropped frame(s) detected. D: \033[0;0m' )

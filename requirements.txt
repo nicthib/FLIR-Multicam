@@ -2,4 +2,4 @@ numpy
 termplotlib
 pyyaml
 ruamel.yaml
-
+colorama
