@@ -1,11 +1,11 @@
-# FLIR Multicam: An efficient multi-cam setup using a hardware trigger/freerun capture and python
+# FLIR-Multicam: An efficient multi-cam setup using a hardware trigger/freerun capture and python
 
 This repository seeks to improve on current FLIR documentation for use of their robust and open-source cameras. This code was specifically created to be used on multi-camera setups running at "high" speeds (up to 125 fps has been tested). While many FLIR cameras boast a high free-running FPS, saving captured images can be a challenge. This code improves on their provided approach by offloading a lot of the work via multithreading.
 
 ## Intallation Instructions
 
-- Download and install BOTH latest Spinnaker SDK and Spinnaker Python (PySpin) for your OS and CPU architecture:
-  - https://flir.app.boxcn.net/v/SpinnakerSDK/folder/68522911814
+Download and install BOTH latest Spinnaker SDK and Spinnaker Python (PySpin) for your OS and CPU architecture:
+   - https://flir.app.boxcn.net/v/SpinnakerSDK/folder/68522911814
 
 #### Linux System Setup (Ubuntu 16.04 - 22.04)   
   - Download, unzip, and Install PySpin 3.0 with latest, correct versions:
@@ -19,21 +19,22 @@ This repository seeks to improve on current FLIR documentation for use of their 
 - Install Chocolately in an administrative PowerShell:
   - https://chocolatey.org/install#install-step2
 - Install Python:
-  - choco install python --version=3.10.8
+  - `choco install python --version=3.10.8`
 - Install Git:
-  - choco install poshgit
+  - `choco install poshgit`
 - Update pip:
-  - python -m pip install -U pip
+  - `python -m pip install -U pip`
 - Download, unzip, and Install PySpin 3.0 with latest, correct versions:
   - https://flir.app.boxcn.net/v/SpinnakerSDK/folder/73501875299
-  - Open a PowerShell window
-  - `Expand-Archive $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64.zip -DestinationPath $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64`
-  - `cd $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64`
-  - `python -m pip install spinnaker_python-3.0.0.118-cp310-cp310-win_amd64.whl`
-- Then, in PowerShell run:
-  - git clone https://github.com/nicthib/FLIR-Multicam.git
-  - cd FLIR-Multicam
-  - python -m pip install -r requirements.txt
+  - Open a PowerShell window, then:
+    - `Expand-Archive $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64.zip -DestinationPath $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64`
+    - `cd $HOME/Downloads/spinnaker_python-3.0.0.118-cp310-cp310-win_amd64`
+    - `python -m pip install spinnaker_python-3.0.0.118-cp310-cp310-win_amd64.whl`
+
+#### Clone FLIR-Multicam
+- `git clone https://github.com/nicthib/FLIR-Multicam.git`
+- `cd FLIR-Multicam`
+- `python -m pip install -r requirements.txt`
 
 ## Usage Instructions
 
