@@ -1,2 +1,4 @@
 .ipynb_checkpoints
-/images
+/images*
+/.images*
+*.jpg

@@ -1,6 +1,6 @@
 num_images: 150
 exp_time: 0.01
 file_path: 0
-file_name: test
-stim_run: 1
+file_name: yyyymmdd_name_conditionXX_conditionYY # session number automatically appends to date
 framerate: 30
+trigger_line: Line0 # not used if framerate is not "hardware"
